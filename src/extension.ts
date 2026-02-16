@@ -7,7 +7,6 @@ dotenv.config({
 });
 
 import { generatePracticeQuestion } from './services/aiService';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 export function activate(context: vscode.ExtensionContext) {
 

@@ -1,19 +1,21 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 
-const apiKey = process.env.GEMINI_API_KEY;
+const apiKey = process.env.OPENAI_API_KEY;
 
 if (!apiKey) {
-    throw new Error("GEMINI_API_KEY not configured.");
+    throw new Error("OPENAI_API_KEY not configured.");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
+const openai = new OpenAI({
+    apiKey: apiKey,
+});
 
-export async function generatePracticeQuestion(topic: string, language: string): Promise<string> {
+export async function generatePracticeQuestion(
+    topic: string,
+    language: string
+): Promise<string> {
 
     try {
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash-latest"
-        });
 
         const prompt = `
 Generate ONE beginner-friendly coding practice question.
@@ -29,13 +31,22 @@ Rules:
 - Only return the question text.
 `;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "user", content: prompt }
+            ],
+            temperature: 0.7,
+        });
 
-        return response.text();
+        return response.choices[0].message.content || "No question generated.";
 
     } catch (error: any) {
-        console.error("FULL GEMINI ERROR:", error);
-        return `Gemini Error: ${error.message}`;
+        const errorMessage = error?.message || JSON.stringify(error);
+        console.error("OPENAI ERROR:", errorMessage);
+        if (error?.status === 401) {
+            return "OpenAI API Error: Invalid API key. Please check your OPENAI_API_KEY in .env";
+        }
+        return `OpenAI Error: ${errorMessage}`;
     }
 }

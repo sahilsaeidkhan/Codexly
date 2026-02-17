@@ -12,34 +12,45 @@
   ],
   "contributes": {
     "commands": [
-        {
-  "command": "codeforgex.startPractice",
-  "title": "Start Practice",
-  "icon": {
-    "dark": "resources/play-dark.svg",
-    "light": "resources/play-light.svg"
-  }
-}
-,
-        {
-            "command": "codeforgex.showHint",
-            "title": "Show Hint"
-        },
-        {
-            "command": "codeforgex.showSolution",
-            "title": "Show Solution"
+      {
+        "command": "codeforgex.startPractice",
+        "title": "Start Practice",
+        "icon": {
+          "dark": "resources/play-dark.svg",
+          "light": "resources/play-light.svg"
         }
+      },
+      {
+        "command": "codeforgex.showHint",
+        "title": "Show Hint"
+      },
+      {
+        "command": "codeforgex.showSolution",
+        "title": "Show Solution"
+      },
+      {
+        "command": "codeforgex.evaluateSolution",
+        "title": "Evaluate Code"
+      },
+      {
+        "command": "codeforgex.explainCode",
+        "title": "Explain Code"
+      },
+      {
+        "command": "codeforgex.removeExplanation",
+        "title": "Remove Explanation"
+      }
     ],
     "menus": {
-        "editor/title": [
-            {
-                "command": "codeforgex.startPractice",
-                "when": "editorTextFocus",
-                "group": "navigation"
-            }
-        ]
+      "editor/title": [
+        {
+          "command": "codeforgex.startPractice",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ]
     }
-},
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

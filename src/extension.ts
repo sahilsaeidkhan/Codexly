@@ -74,30 +74,17 @@ export function activate(context: vscode.ExtensionContext) {
 
 		if (!difficulty) return;
 
-		// Mode
-		const mode = await vscode.window.showQuickPick(
-			[
-				'Question Only',
-				'Question + Hint',
-				'Full Solution',
-				'Multiple Approaches'
-			],
-			{ placeHolder: 'Select practice mode' }
-		);
-
-		if (!mode) return;
-
 		vscode.window.showInformationMessage('Generating practice content...');
 
 		let aiContent: string;
 
 		try {
 			aiContent = await generatePracticeQuestion(
-				detectedTopic,
-				languageId,
-				difficulty,
-				mode
-			);
+    		detectedTopic,
+  		    languageId,
+            difficulty
+        );
+
 		} catch (error) {
 			console.error(error);
 			vscode.window.showErrorMessage('AI generation failed.');
@@ -107,7 +94,8 @@ export function activate(context: vscode.ExtensionContext) {
 		const commentPrefix = languageId === 'python' ? '# ' : '// ';
 
 		const headerLine =
-			`${commentPrefix}Question (${difficulty} | ${mode})\n\n`;
+ 		   `${commentPrefix}Question (${difficulty})\n\n`;
+
 
 		// 🔥 Structured Parsing - ONLY extract, DO NOT insert hint/solution
 		const questionMatch = aiContent.match(/\[QUESTION\]([\s\S]*?)(?=\[HINT\]|\[SOLUTION\]|$)/);
@@ -121,12 +109,13 @@ export function activate(context: vscode.ExtensionContext) {
 		// Build content with ONLY the question
 		let finalContent = headerLine;
 		if (questionMatch) {
-			const questionText = questionMatch[1].trim();
-			finalContent += questionText
+    		finalContent += questionMatch[1]
+				.trim()
 				.split('\n')
 				.map(line => commentPrefix + line)
 				.join('\n') + '\n\n';
 		}
+
 
 		// Insert ONLY the question into the editor
 		await editor.edit(editBuilder => {
@@ -135,6 +124,42 @@ export function activate(context: vscode.ExtensionContext) {
 				finalContent
 			);
 		});
+		const nextAction = await vscode.window.showInformationMessage(
+    "Question generated.",
+    "Show Hint",
+    "Show Solution"
+);
+
+if (nextAction === "Show Hint") {
+
+    await vscode.commands.executeCommand("codeforgex.showHint");
+
+    // 🔥 After showing hint, ask again for solution
+    const afterHint = await vscode.window.showInformationMessage(
+        "Hint revealed.",
+        "Show Solution",
+        "Close"
+    );
+
+    if (afterHint === "Show Solution") {
+        await vscode.commands.executeCommand("codeforgex.showSolution");
+    }
+
+} else if (nextAction === "Show Solution") {
+
+    await vscode.commands.executeCommand("codeforgex.showSolution");
+
+}
+
+
+		if (nextAction === "Show Hint") {
+			vscode.commands.executeCommand("codeforgex.showHint");
+		}
+
+		if (nextAction === "Show Solution") {
+			vscode.commands.executeCommand("codeforgex.showSolution");
+		}
+
 
 		// Enable word wrap
 		await vscode.workspace.getConfiguration('editor').update(
@@ -146,46 +171,56 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	const hintCommand = vscode.commands.registerCommand('codeforgex.showHint', async () => {
 
-	const editor = vscode.window.activeTextEditor;
-	if (!editor || !storedHint) {
-		vscode.window.showInformationMessage('No hint available.');
-		return;
-	}
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !storedHint) {
+        vscode.window.showInformationMessage('No hint available.');
+        return;
+    }
 
-	const commentPrefix = editor.document.languageId === 'python' ? '# ' : '// ';
+    // 🚫 Prevent duplicate hint
+    if (editor.document.getText().includes("Hint:")) {
+        vscode.window.showInformationMessage('Hint already revealed.');
+        return;
+    }
 
-	const hintContent =
-		`\n${commentPrefix}Hint:\n` +
-		storedHint
-			.split('\n')
-			.map(line => commentPrefix + line)
-			.join('\n') +
-		'\n\n';
+    const commentPrefix = editor.document.languageId === 'python' ? '# ' : '// ';
 
-	await editor.edit(editBuilder => {
-		editBuilder.insert(
-			new vscode.Position(editor.document.lineCount, 0),
-			hintContent
-		);
-	});
+    const hintContent =
+        `\n${commentPrefix}Hint:\n` +
+        storedHint
+            .split('\n')
+            .map(line => commentPrefix + line)
+            .join('\n') +
+        '\n\n';
+
+    await editor.edit(editBuilder => {
+        editBuilder.insert(
+            new vscode.Position(editor.document.lineCount, 0),
+            hintContent
+        );
+    });
 });
 const solutionCommand = vscode.commands.registerCommand('codeforgex.showSolution', async () => {
 
-	const editor = vscode.window.activeTextEditor;
-	if (!editor || !storedSolution) {
-		vscode.window.showInformationMessage('No solution available.');
-		return;
-	}
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || !storedSolution) {
+        vscode.window.showInformationMessage('No solution available.');
+        return;
+    }
 
-	const solutionContent = `\n${storedSolution}\n\n`;
+    const solutionContent = `\n${storedSolution}\n\n`;
 
-	await editor.edit(editBuilder => {
-		editBuilder.insert(
-			new vscode.Position(editor.document.lineCount, 0),
-			solutionContent
-		);
-	});
+    await editor.edit(editBuilder => {
+        editBuilder.insert(
+            new vscode.Position(editor.document.lineCount, 0),
+            solutionContent
+        );
+    });
+
+    // 🔥 Clear hint after showing solution
+    storedHint = null;
 });
+
 	context.subscriptions.push(disposable, hintCommand, solutionCommand);
 }
 

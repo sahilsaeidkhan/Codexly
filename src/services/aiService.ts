@@ -13,108 +13,61 @@ const openai = new OpenAI({
 export async function generatePracticeQuestion(
     topic: string,
     language: string,
-    difficulty: string,
-    mode: string
+    difficulty: string
 ): Promise<string> {
 
     try {
 
-        // 🔥 Mode-Based Instruction Block
-        let modeInstruction = "";
-
-        if (mode === "Question Only") {
-            modeInstruction = `
-- Generate ONLY the question.
-- DO NOT include hint.
-- DO NOT include solution.
-`;
-        } else if (mode === "Question + Hint") {
-            modeInstruction = `
-- First write the question.
-- Then write a short hint.
-- Clearly separate question and hint using a blank line.
-- DO NOT include solution.
-`;
-        } else if (mode === "Full Solution") {
-            modeInstruction = `
-- First write the question.
-- Then provide the complete solution in ${language}.
-- Clearly separate question and solution using a blank line.
-`;
-        } else if (mode === "Multiple Approaches") {
-            modeInstruction = `
-- First write the question.
-- Then provide 2 different solution approaches in ${language}.
-- Clearly separate each section using blank lines.
-`;
-        }
+        // 🔥 Language-specific enforcement
         let languageInstruction = "";
 
-if (language === "javascript") {
-    languageInstruction = `
+        if (language === "javascript") {
+            languageInstruction = `
 - Generate PURE JavaScript.
 - DO NOT use TypeScript type annotations.
 - DO NOT use ": number", ": string", "number[]", etc.
 - Do NOT write function signatures with types.
 `;
-}
-
-else if (language === "typescript") {
-    languageInstruction = `
+        } else if (language === "typescript") {
+            languageInstruction = `
 - Generate proper TypeScript.
 - Type annotations are allowed.
 `;
-}
-
-else if (language === "python") {
-    languageInstruction = `
+        } else if (language === "python") {
+            languageInstruction = `
 - Generate proper Python.
 - Do NOT use JavaScript syntax.
 `;
-}
-
+        }
 
         const prompt = `
-        Generate ONE ${difficulty} level coding practice content.
+Generate a ${difficulty} level coding practice problem.
 
-        Topic: ${topic}
-        Programming Language: ${language}
+Topic: ${topic}
+Programming Language: ${language}
 
-        Language Rules:
-        ${languageInstruction}
+${languageInstruction}
 
-        Difficulty Guidelines:
-        - Easy → Basic logic
-        - Medium → Moderate logic
-        - Hard → Advanced logic, optimized approach
+Return output STRICTLY in this format:
 
-        Mode: ${mode}
+[QUESTION]
+Clear problem statement only.
 
-        IMPORTANT OUTPUT FORMAT:
+[HINT]
+A helpful hint for solving the problem.
 
-        You MUST return content strictly in this format:
+[SOLUTION]
+Complete correct solution in ${language}.
 
-        [QUESTION]
-        <Question text here>
-
-        ${mode === "Question Only" ? "" : `
-        ${mode === "Question + Hint" ? `
-        [HINT]
-        <Short hint only>
-        ` : ""}
-
-        ${mode === "Full Solution" || mode === "Multiple Approaches" ? `
-        [SOLUTION]
-        <Only executable ${language} code here>
-        ` : ""}
-        `}
-
-        STRICT RULES:
-        - Do NOT add anything outside these markers.
-        - Do NOT use decorative formatting.
-        - Do NOT include extra commentary.
-        - Do NOT include explanations outside sections.
-        `;
+Rules:
+- DO NOT wrap the solution in markdown.
+- DO NOT use triple backticks.
+- Return raw code only inside [SOLUTION].
+- Do not add extra headings.
+- Do not add explanations outside blocks.
+- Do not remove the block labels.
+- Solution must be valid runnable ${language} code.
+`;
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -126,12 +79,14 @@ else if (language === "python") {
 
         let rawText = response.choices[0].message.content || "No content generated.";
 
-        // 🔥 Cleanup Layer
-        rawText = rawText
-        // Remove lines that are ONLY separators like ===== or -----
+        // 🔥 Safe Cleanup Layer
+            rawText = rawText
+        .replace(/```[\w]*\n?/g, "")   // remove ```python or ```
+        .replace(/```/g, "")          // remove closing ```
         .replace(/^\s*[=-]{3,}\s*$/gm, "")
         .replace(/Question:/gi, "")
         .trim();
+
 
         return rawText;
 

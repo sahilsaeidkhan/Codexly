@@ -21,6 +21,14 @@
         }
       },
       {
+        "command": "codeforgex.run",
+        "title": "Run Code",
+        "icon": {
+          "light": "resources/play-light.svg",
+          "dark": "resources/play-dark.svg"
+        }
+      },
+      {
         "command": "codeforgex.showHint",
         "title": "Show Hint"
       },
@@ -47,10 +55,19 @@
       {
         "command": "codeforgex.removeExplanation",
         "title": "Remove Explanation"
+      },
+      {
+        "command": "codeforgex.timerControls",
+        "title": "Timer Controls"
       }
     ],
     "menus": {
       "editor/title": [
+        {
+          "command": "codeforgex.run",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        },
         {
           "command": "codeforgex.startPractice",
           "when": "editorTextFocus",

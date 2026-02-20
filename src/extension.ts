@@ -4,6 +4,8 @@ import * as path from 'path';
 import OpenAI from "openai";
 import { PracticeTimer } from './services/timerService';
 import { runActiveFile } from './services/runService';
+import { saveToken, getToken, deleteToken, isLoggedIn } from './services/authService';
+import { sendPracticeData } from './services/apiService';
 
 
 
@@ -49,6 +51,14 @@ let timerStarted = false;
 let isExtensionEditing = false;
 
 // ─────────────────────────────────────────────────────────────
+// PHASE 2: Practice session tracking
+// These are reset on every new question generation so each
+// practice session is tracked independently.
+// ─────────────────────────────────────────────────────────────
+let hintsUsed = 0;
+let solutionViewed = false;
+
+// ─────────────────────────────────────────────────────────────
 // FIX 2 & 3: detectManualQuestion
 // Detects common coding question patterns for manually pasted
 // questions. Used in onDidChangeTextDocument so the timer starts
@@ -90,6 +100,67 @@ export function activate(context: vscode.ExtensionContext) {
 	vscode.commands.executeCommand('setContext', 'codeforgex.hintVisible', false);
 	vscode.commands.executeCommand('setContext', 'codeforgex.evaluationVisible', false);
 	console.log('CodeForgeX is now active!');
+
+	// ─────────────────────────────────────────────────────────────
+	// PHASE 3: Auto-login persistence check on activation.
+	// If a token is already stored, user is considered logged in.
+	// No server validation — validation happens on first API call.
+	// ─────────────────────────────────────────────────────────────
+	isLoggedIn(context).then(loggedIn => {
+		if (loggedIn) {
+			console.log('CodeForgeX: User session restored.');
+		}
+	});
+
+	// ─────────────────────────────────────────────────────────────
+	// PHASE 1: URI handler for deep link redirect after browser login.
+	// Website redirects to: vscode://<extension-id>/auth?token=JWT
+	// VS Code intercepts this and fires the URI handler below.
+	// ─────────────────────────────────────────────────────────────
+const uriHandler = vscode.window.registerUriHandler({
+	handleUri: async (uri: vscode.Uri) => {
+
+		console.log("FULL URI:", uri.toString());
+		console.log("PATH:", uri.path);
+		console.log("QUERY:", uri.query);
+
+		const params = new URLSearchParams(uri.query);
+		const token = params.get('token');
+
+		if (token) {
+			await saveToken(context, token);
+			vscode.window.showInformationMessage('CodeForgeX: Login successful!');
+		} else {
+			vscode.window.showErrorMessage('No token received.');
+		}
+	}
+});
+
+	context.subscriptions.push(uriHandler);
+
+	// PHASE 1: Login command — opens browser to login page.
+	// After login, website redirects back via vscode:// deep link.
+	const loginCommand = vscode.commands.registerCommand(
+		'codeforgex.login',
+		async () => {
+			const loginUrl = vscode.Uri.parse('https://codexly.netlify.app/login');
+			await vscode.env.openExternal(loginUrl);
+			vscode.window.showInformationMessage(
+				'CodeForgeX: Opening login page. After login, you will be redirected back automatically.'
+			);
+		}
+	);
+	context.subscriptions.push(loginCommand);
+
+	// PHASE 3: Logout command — deletes stored token.
+	const logoutCommand = vscode.commands.registerCommand(
+		'codeforgex.logout',
+		async () => {
+			await deleteToken(context);
+			vscode.window.showInformationMessage('CodeForgeX: Logged out successfully.');
+		}
+	);
+	context.subscriptions.push(logoutCommand);
 
 	// ============================
 	// Create Timer Status Bar
@@ -426,6 +497,10 @@ export function activate(context: vscode.ExtensionContext) {
 					storedSolution = solutionMatch ? solutionMatch[1].trim() : null;
 					isUserWrittenQuestion = true;
 
+					// Reset practice tracking for new session
+					hintsUsed = 0;
+					solutionViewed = false;
+
 					// Set flags exactly like normal generation
 					await updateContextFlag('codeforgex.hintVisible', false);
 					await updateContextFlag('codeforgex.solutionVisible', false);
@@ -438,6 +513,10 @@ export function activate(context: vscode.ExtensionContext) {
 				} else {
 					// No user-written question found — normal AI question generation flow
 					isUserWrittenQuestion = false;
+
+					// Reset practice tracking for new session
+					hintsUsed = 0;
+					solutionViewed = false;
 
 					// Reset context keys for new question
 					await updateContextFlag('codeforgex.hintVisible', false);
@@ -676,6 +755,9 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 			isExtensionEditing = false;
 
+			// PHASE 2: Track hint usage for practice data sync
+			hintsUsed++;
+
 			// Set context key to show hide hint button
 			await updateContextFlag('codeforgex.hintVisible', true);
 		}
@@ -841,6 +923,9 @@ export function activate(context: vscode.ExtensionContext) {
 				);
 			});
 			isExtensionEditing = false;
+
+			// PHASE 2: Track solution view for practice data sync
+			solutionViewed = true;
 
 			// Set context key to show explain and evaluate options
 			await updateContextFlag('codeforgex.solutionVisible', true);
@@ -1239,6 +1324,26 @@ ${storedSolution}
 					vscode.window.showInformationMessage(
 						`Practice completed in ${finalTime}`
 					);
+
+					// ─────────────────────────────────────────────────────
+					// PHASE 2: Send practice data to backend after success.
+					// All session data is available here in extension.ts —
+					// no changes needed in runService.ts.
+					// ─────────────────────────────────────────────────────
+					const editor = vscode.window.activeTextEditor;
+					const language = editor?.document.languageId ?? 'unknown';
+					const question = storedSolution
+						? (storedHint ?? 'Practice session')
+						: 'Practice session';
+
+					sendPracticeData(context, {
+						question: question,
+						timeTaken: finalTime,
+						hintsUsed: hintsUsed,
+						solutionViewed: solutionViewed,
+						language: language,
+						date: new Date().toISOString()
+					}); // intentionally not awaited — fire and forget, don't block UI
 				}
 			} else {
 				vscode.window.showErrorMessage(
@@ -1388,6 +1493,17 @@ ${selectedText}`
 			vscode.window.showInformationMessage('All selection explanations removed.');
 		}
 	);
+	const checkTokenCommand = vscode.commands.registerCommand(
+	'codeforgex.checkToken',
+	async () => {
+		const token = await context.secrets.get('CFX_AUTH_TOKEN');
+		if (token) {
+			vscode.window.showInformationMessage(`Stored Token: ${token}`);
+		} else {
+			vscode.window.showInformationMessage('No token found in storage.');
+		}
+	}
+);
 
 	context.subscriptions.push(
 		disposable,
@@ -1402,7 +1518,8 @@ ${selectedText}`
 		runCommand,
 		timerControlCommand,
 		explainSelectionCommand,
-		removeSelectionExplanationCommand
+		removeSelectionExplanationCommand,
+		checkTokenCommand
 	);
 }
 

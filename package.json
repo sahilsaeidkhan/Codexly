@@ -1,9 +1,16 @@
 {
   "name": "codeforgex",
+  "publisher": "prashant",
   "displayName": "CodeForgeX",
   "description": "AI-powered coding practice and skill-building platform inside VS Code.",
   "version": "0.0.1",
   "main": "./out/extension.js",
+
+  "activationEvents": [
+  "onStartupFinished",
+  "onUri"
+],
+
   "engines": {
     "vscode": "^1.109.0"
   },
@@ -12,6 +19,10 @@
   ],
   "contributes": {
     "commands": [
+      {
+  "command": "codeforgex.checkToken",
+  "title": "CodeForgeX: Check Stored Token"
+},
       {
         "command": "codeforgex.startPractice",
         "title": "Start Practice",
@@ -24,8 +35,8 @@
         "command": "codeforgex.run",
         "title": "Run Code",
         "icon": {
-          "light": "resources/play-light.svg",
-          "dark": "resources/play-dark.svg"
+          "light": "resources/run-light.svg",
+          "dark": "resources/run-dark.svg"
         }
       },
       {

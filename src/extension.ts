@@ -1,23 +1,17 @@
 import * as vscode from 'vscode';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import OpenAI from "openai";
 import { PracticeTimer } from './services/timerService';
 import { runActiveFile } from './services/runService';
 import { saveToken, getToken, deleteToken, isLoggedIn } from './services/authService';
 import { sendPracticeData } from './services/apiService';
 
-
-
-
 dotenv.config({
 	path: path.resolve(__dirname, '../.env')
 });
-const openai = new OpenAI({
-	apiKey: process.env.OPENAI_API_KEY
-});
 
 import { generatePracticeQuestion } from './services/aiService';
+import { evaluateCode, explainCode, explainSelection } from './services/geminiService';
 
 let storedHint: string | null = null;
 let storedSolution: string | null = null;
@@ -960,61 +954,7 @@ const uriHandler = vscode.window.registerUriHandler({
 						cancellable: false
 					},
 					async () => {
-						const response = await openai.chat.completions.create({
-							model: "gpt-4o-mini",
-							messages: [
-								{
-									role: "user",
-									content: `You are a code reviewer. Analyze this ${languageId} code and provide a SHORT evaluation.
-
-REFERENCE SOLUTION:
-${storedSolution}
-
-USER'S CODE:
-${userCode}
-
-Respond EXACTLY in this format (no markdown, no decorators):
-
-Code Evaluation Summary:
-
-Correctness:
-<2 sentences max about correctness. Use "Your code">
-
-Edge Cases:
-<2 sentences max, or "Handles edge cases well">
-
-Time Complexity:
-<2 sentences max, or "Complexity is appropriate">
-
-Code Quality:
-<2 sentences max, or "Code is clean and readable">
-
-Final Verdict:
-<Correct / Partially Correct / Needs Improvement>
-
-IF YOUR CODE NEEDS IMPROVEMENTS, append this section ONLY IF NEEDED:
-
-Suggestions:
-
-LINE <number>:
-Issue: <brief issue description>
-Better Approach: <what to do instead>
-Example Replacement: <1-2 lines of code>
-
-Only suggest lines with clear improvements. Keep to 2-3 suggestions maximum.
-
-IMPORTANT:
-- Do NOT add markdown formatting.
-- Do NOT wrap anything in backticks.
-- Do NOT add decorative lines or borders.
-- Speak directly: "Your code" not "the user's code".
-- If no improvements needed, do NOT include Suggestions section.`
-								}
-							],
-							temperature: 0.4
-						});
-
-						return response.choices[0].message.content || "Evaluation could not be generated.";
+						return await evaluateCode(languageId, storedSolution!, userCode);
 					}
 				);
 
@@ -1129,31 +1069,7 @@ IMPORTANT:
 						cancellable: false
 					},
 					async () => {
-
-						const response = await openai.chat.completions.create({
-							model: "gpt-4o-mini",
-							messages: [
-								{
-									role: "user",
-									content: `
-Explain the following ${editor.document.languageId} code.
-
-Rules:
-- Add ONE short comment line before each line of code.
-- Do NOT remove original code.
-- Do NOT add markdown formatting.
-- Do NOT wrap in triple backticks.
-- Return ONLY code with explanation comments.
-
-Code:
-${storedSolution}
-`
-								}
-							],
-							temperature: 0.3
-						});
-
-						return response.choices[0].message.content || "";
+						return await explainCode(editor.document.languageId, storedSolution!);
 					}
 				);
 
@@ -1402,34 +1318,7 @@ ${storedSolution}
 						cancellable: false
 					},
 					async () => {
-						const response = await openai.chat.completions.create({
-							model: "gpt-4o-mini",
-							messages: [
-								{
-									role: "user",
-									content: `You are a coding tutor explaining code to a beginner.
-
-Explain the following ${languageId} code selection line by line.
-
-Rules:
-- Before EACH line of code, add ONE short comment explaining what that line does.
-- Use very simple, clear language. Avoid jargon.
-- Be creative and use different analogies or examples each time.
-- If helpful, add a tiny inline example in the comment.
-- Do NOT remove any original code lines.
-- Do NOT add markdown formatting.
-- Do NOT wrap in triple backticks.
-- Do NOT add decorative borders or separators.
-- Return ONLY the commented + original code. Nothing else.
-
-Code to explain:
-${selectedText}`
-								}
-							],
-							temperature: 0.7
-						});
-
-						return response.choices[0].message.content?.trim() || selectedText;
+						return await explainSelection(languageId, selectedText);
 					}
 				);
 			} catch {
